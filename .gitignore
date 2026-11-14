@@ -1,0 +1,23 @@
+﻿# Dependencias
+node_modules/
+target/
+dist/
+coverage/
+
+# IntelliJ y VS Code
+.idea/
+.vscode/
+.run/
+*.iml
+
+# Credenciales privadas
+.env
+.env.*
+!.env.example
+**/application-local.properties
+**/application-secret.properties
+
+# Temporales y respaldos
+*.log
+*.tmp
+App.respaldo.txt
