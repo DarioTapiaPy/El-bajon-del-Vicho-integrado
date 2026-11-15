@@ -113,16 +113,17 @@ describe('RegisterModal', () => {
             'jose@test.cl',
         )
 
+        // Primero superar la validacion de 8 caracteres.
         changeValue(
             container.querySelector('#registerPassword'),
-            '123456',
+            '12345678',
         )
 
         changeValue(
             container.querySelector(
                 '#registerConfirmPassword',
             ),
-            '654321',
+            '87654321',
         )
 
         submitForm()
@@ -136,7 +137,7 @@ describe('RegisterModal', () => {
         ).not.toHaveBeenCalled()
     })
 
-    it('debe rechazar una contraseña menor a 6 caracteres', () => {
+    it('debe rechazar una contraseña menor a 8 caracteres', () => {
         const onClose =
             jasmine.createSpy('onClose')
 
@@ -181,7 +182,7 @@ describe('RegisterModal', () => {
         submitForm()
 
         expect(container.textContent).toContain(
-            'La contraseña debe tener al menos 6 caracteres.',
+            'La contraseña debe tener al menos 8 caracteres.',
         )
 
         expect(
@@ -223,14 +224,14 @@ describe('RegisterModal', () => {
 
         changeValue(
             container.querySelector('#registerPassword'),
-            '123456',
+            '12345678',
         )
 
         changeValue(
             container.querySelector(
                 '#registerConfirmPassword',
             ),
-            '123456',
+            '12345678',
         )
 
         submitForm()
@@ -239,22 +240,23 @@ describe('RegisterModal', () => {
             onRegister,
         ).toHaveBeenCalledTimes(1)
 
-        expect(
-            onRegister,
-        ).toHaveBeenCalledWith({
+        expect(onRegister).toHaveBeenCalledWith({
             name: 'Jose Prueba',
             email: 'jose@test.cl',
+            password: '12345678',
         })
     })
 
-    it('debe informar cuando el correo ya está registrado', () => {
+    it('debe informar cuando el backend rechaza un correo duplicado', async () => {
         const onClose =
             jasmine.createSpy('onClose')
 
         const onRegister =
             jasmine
                 .createSpy('onRegister')
-                .and.returnValue(false)
+                .and.returnValue(Promise.reject(
+                    new Error('El correo ingresado ya se encuentra registrado.'),
+                ))
 
         act(() => {
             root.render(
@@ -281,17 +283,26 @@ describe('RegisterModal', () => {
 
         changeValue(
             container.querySelector('#registerPassword'),
-            '123456',
+            '12345678',
         )
 
         changeValue(
             container.querySelector(
                 '#registerConfirmPassword',
             ),
-            '123456',
+            '12345678',
         )
 
-        submitForm()
+        const form = container.querySelector('form')
+
+        await act(async () => {
+            form.dispatchEvent(
+                new Event('submit', {
+                    bubbles: true,
+                    cancelable: true,
+                }),
+            )
+        })
 
         expect(
             onRegister,

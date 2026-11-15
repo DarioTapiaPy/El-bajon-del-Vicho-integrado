@@ -175,8 +175,10 @@ describe('LoginModal y AddressModal', () => {
 
         expect(onLogin).toHaveBeenCalledTimes(1)
 
+        // El formulario actual envia correo y contrasena al backend.
         expect(onLogin).toHaveBeenCalledWith(
             'prueba@correo.cl',
+            '123456',
         )
     })
 

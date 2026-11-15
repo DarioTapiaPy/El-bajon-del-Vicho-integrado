@@ -211,6 +211,7 @@ describe('AdminSection', () => {
     function renderAdmin(
         onSaveProduct,
         onToggleStock,
+        onLogout = () => {},
     ) {
         act(() => {
             root.render(
@@ -220,6 +221,7 @@ describe('AdminSection', () => {
                         products,
                         onSaveProduct,
                         onToggleStock,
+                        onLogout,
                     },
                 ),
             )
@@ -249,103 +251,38 @@ describe('AdminSection', () => {
         sessionStorage.clear()
     })
 
-    it('debe rechazar credenciales administrativas incorrectas', () => {
-        const onSaveProduct =
-            jasmine.createSpy('onSaveProduct')
+    it('debe mostrar la gestion de productos (la sesion se controla en App)', () => {
+        const onSaveProduct = jasmine.createSpy('onSaveProduct')
+        const onToggleStock = jasmine.createSpy('onToggleStock')
 
-        const onToggleStock =
-            jasmine.createSpy('onToggleStock')
+        renderAdmin(onSaveProduct, onToggleStock)
 
-        const alertSpy =
-            spyOn(window, 'alert')
-
-        renderAdmin(
-            onSaveProduct,
-            onToggleStock,
-        )
-
-        const email =
-            container.querySelector('#adminEmail')
-
-        const password =
-            container.querySelector('#adminPassword')
-
-        changeValue(
-            email,
-            'incorrecto@correo.cl',
-        )
-
-        changeValue(
-            password,
-            'clave-mala',
-        )
-
-        const form =
-            container.querySelector('form')
-
-        act(() => {
-            form.dispatchEvent(
-                new Event('submit', {
-                    bubbles: true,
-                    cancelable: true,
-                }),
-            )
-        })
-
-        expect(alertSpy).toHaveBeenCalledTimes(1)
-
-        expect(
-            sessionStorage.getItem('adminAuth'),
-        ).toBeNull()
+        expect(container.textContent).toContain('Gestión de Productos')
+        expect(container.textContent).toContain('COMBO ADMIN')
+        expect(container.querySelector('#adminEmail')).toBeNull()
+        expect(container.querySelector('#adminPassword')).toBeNull()
     })
 
-    it('debe permitir iniciar sesión con las credenciales administrativas correctas', () => {
-        const onSaveProduct =
-            jasmine.createSpy('onSaveProduct')
+    it('debe notificar el cierre de sesion administrativa', () => {
+        const onSaveProduct = jasmine.createSpy('onSaveProduct')
+        const onToggleStock = jasmine.createSpy('onToggleStock')
+        const onLogout = jasmine.createSpy('onLogout')
 
-        const onToggleStock =
-            jasmine.createSpy('onToggleStock')
+        renderAdmin(onSaveProduct, onToggleStock, onLogout)
 
-        renderAdmin(
-            onSaveProduct,
-            onToggleStock,
+        const logoutButton = Array.from(
+            container.querySelectorAll('button'),
+        ).find((button) =>
+            button.textContent.includes('Cerrar sesión admin'),
         )
 
-        const email =
-            container.querySelector('#adminEmail')
-
-        const password =
-            container.querySelector('#adminPassword')
-
-        changeValue(
-            email,
-            'vicente@admin.cl',
-        )
-
-        changeValue(
-            password,
-            'admin123',
-        )
-
-        const form =
-            container.querySelector('form')
+        expect(logoutButton).not.toBeUndefined()
 
         act(() => {
-            form.dispatchEvent(
-                new Event('submit', {
-                    bubbles: true,
-                    cancelable: true,
-                }),
-            )
+            logoutButton.click()
         })
 
-        expect(
-            sessionStorage.getItem('adminAuth'),
-        ).toBe('true')
-
-        expect(container.textContent).toContain(
-            'COMBO ADMIN',
-        )
+        expect(onLogout).toHaveBeenCalledTimes(1)
     })
 
     it('debe ejecutar onToggleStock con el producto correcto', () => {
@@ -389,7 +326,7 @@ describe('AdminSection', () => {
         ).toHaveBeenCalledWith('prod-1')
     })
 
-    it('debe guardar una descripción y precio válidos', () => {
+    it('debe guardar una descripción y precio válidos', async () => {
         sessionStorage.setItem(
             'adminAuth',
             'true',
@@ -438,7 +375,9 @@ describe('AdminSection', () => {
                     button.textContent.trim() === 'Guardar',
             )
 
-        act(() => {
+        // onSaveProduct es asincrono: esperar a que termine antes
+        // de verificar el mensaje de exito.
+        await act(async () => {
             saveButton.click()
         })
 

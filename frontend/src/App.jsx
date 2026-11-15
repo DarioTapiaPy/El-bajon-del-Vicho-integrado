@@ -585,6 +585,12 @@ function App() {
 
             <ReservationSection
                 userEmail={userEmail}
+                authToken={authToken}
+                onSessionRenewed={(sesion) => {
+                    setAuthToken(sesion.token)
+                    setAuthUser(sesion.usuario)
+                    setUserEmail(sesion.usuario.email)
+                }}
                 onRequireLogin={() => {
                     setIsRegisterOpen(false)
                     setIsLoginOpen(true)
