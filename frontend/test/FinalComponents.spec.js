@@ -396,69 +396,61 @@ describe('AdminSection', () => {
         expect(alertSpy).toHaveBeenCalled()
     })
 
-    it('debe eliminar una reserva confirmada', () => {
-        sessionStorage.setItem(
-            'adminAuth',
-            'true',
+    it('debe consultar y cancelar una reserva desde la API', async () => {
+        const reserva = {
+            id: 7,
+            correo: 'cliente@correo.cl',
+            sucursal: 'Sucursal Puente Alto',
+            fecha: '2026-11-20',
+            hora: '20:00:00',
+            personas: 2,
+            estado: 'CONFIRMADA',
+        }
+
+        const peticiones = spyOn(globalThis, 'fetch').and.callFake(
+            (url, options = {}) => {
+                if (url.endsWith('/api/v1/reservas') && options.method === 'GET') {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        json: async () => [reserva],
+                    })
+                }
+                if (url.endsWith('/api/v1/reservas/7') && options.method === 'DELETE') {
+                    return Promise.resolve({ ok: true, status: 204 })
+                }
+                throw new Error(`Petición inesperada: ${options.method} ${url}`)
+            },
         )
 
-        localStorage.setItem(
-            'bajon_db_reservas',
-            JSON.stringify([
-                {
-                    correo: 'cliente@correo.cl',
-                    sucursal: 'Sucursal Puente Alto',
-                    fecha: '2026-10-20',
-                    hora: '20:00',
-                    personas: 2,
-                },
-            ]),
-        )
+        spyOn(window, 'confirm').and.returnValue(true)
 
-        const onSaveProduct =
-            jasmine.createSpy('onSaveProduct')
-
-        const onToggleStock =
-            jasmine.createSpy('onToggleStock')
-
-        spyOn(
-            window,
-            'confirm',
-        ).and.returnValue(true)
-
-        renderAdmin(
-            onSaveProduct,
-            onToggleStock,
-        )
-
-        const buttons =
-            Array.from(
-                container.querySelectorAll('button'),
-            )
-
-        const deleteButton =
-            buttons.find(
-                (button) =>
-                    button.textContent.includes('Eliminar'),
-            )
-
-        act(() => {
-            deleteButton.click()
+        await act(async () => {
+            root.render(React.createElement(AdminSection, {
+                products,
+                onSaveProduct: jasmine.createSpy('onSaveProduct'),
+                onToggleStock: jasmine.createSpy('onToggleStock'),
+                onLogout: () => {},
+                authToken: 'token-de-prueba',
+            }))
         })
 
-        const reservations =
-            JSON.parse(
-                localStorage.getItem(
-                    'bajon_db_reservas',
-                ),
-            )
+        expect(container.textContent).toContain('cliente@correo.cl')
+        expect(container.textContent).toContain('CONFIRMADA')
 
-        expect(reservations).toEqual([])
+        const boton = Array.from(container.querySelectorAll('button'))
+            .find((b) => b.textContent.includes('Cancelar reserva'))
+        expect(boton).toBeDefined()
 
-        expect(container.textContent).toContain(
-            'No hay reservas pendientes',
-        )
+        await act(async () => { boton.click() })
+
+        expect(peticiones.calls.allArgs().some(([url, options]) =>
+            url.endsWith('/api/v1/reservas/7') && options.method === 'DELETE'
+        )).toBeTrue()
+        expect(container.textContent).toContain('CANCELADA')
+        expect(localStorage.getItem('bajon_db_reservas')).toBeNull()
     })
+
 })
 
 

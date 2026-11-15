@@ -74,3 +74,16 @@ export function consultarMisReservas(token, onSessionRenewed) {
         method: 'GET',
     }, onSessionRenewed)
 }
+
+// Administración: requiere rol ADMIN en el backend.
+export function consultarTodasReservas(token, onSessionRenewed) {
+    return solicitarReservas('', token, { method: 'GET' }, onSessionRenewed)
+}
+
+export function cancelarReserva(id, token, onSessionRenewed) {
+    const reservaId = Number(id)
+    if (!Number.isSafeInteger(reservaId) || reservaId <= 0) {
+        throw new Error('ID de reserva inválido.')
+    }
+    return solicitarReservas(`/${reservaId}`, token, { method: 'DELETE' }, onSessionRenewed)
+}

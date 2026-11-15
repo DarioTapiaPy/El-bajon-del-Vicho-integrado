@@ -608,6 +608,12 @@ function App() {
                     onSaveProduct={handleSaveProduct}
                     onToggleStock={handleToggleStock}
                     onLogout={handleLogout}
+                       authToken={authToken}
+                    onSessionRenewed={(sesion) => {
+                        setAuthToken(sesion.token)
+                        setAuthUser(sesion.usuario)
+                        setUserEmail(sesion.usuario.email)
+                    }}
                 />
             )}
 

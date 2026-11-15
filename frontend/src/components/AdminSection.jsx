@@ -1,27 +1,54 @@
 
 import { useEffect, useState } from 'react'
-
-function loadReservations() {
-    try {
-        const saved = localStorage.getItem('bajon_db_reservas')
-        if (!saved) return []
-        const parsed = JSON.parse(saved)
-        return Array.isArray(parsed) ? parsed : []
-    } catch (error) {
-        console.error('Error al cargar reservas:', error)
-        return []
-    }
-}
+import { consultarTodasReservas, cancelarReserva } from '../services/reservasApi.js'
 
 function AdminSection({
                           products,
                           onSaveProduct,
                           onToggleStock,
                           onLogout,
+                          authToken,
+                          onSessionRenewed,
                       }) {
-    const [reservations, setReservations] = useState(loadReservations)
+    const [reservations, setReservations] = useState([])
+    const [loadingReservations, setLoadingReservations] = useState(false)
+    const [reservationError, setReservationError] = useState('')
+    const [cancelingId, setCancelingId] = useState(null)
+    const [reservationsRefresh, setReservationsRefresh] = useState(0)
     const [drafts, setDrafts] = useState({})
     const [savingId, setSavingId] = useState(null)
+
+    // La lista viene exclusivamente del microservicio, no de localStorage.
+    useEffect(() => {
+        let active = true
+
+        if (!authToken) {
+            setReservations([])
+            setReservationError('')
+            return () => { active = false }
+        }
+
+        setLoadingReservations(true)
+        setReservationError('')
+
+        consultarTodasReservas(authToken, onSessionRenewed)
+            .then((data) => {
+                if (!active) return
+                if (!Array.isArray(data)) {
+                    throw new Error('La API no devolvió una lista de reservas.')
+                }
+                setReservations(data)
+            })
+            .catch((error) => {
+                if (!active) return
+                setReservationError(error.message || 'No fue posible cargar las reservas.')
+            })
+            .finally(() => {
+                if (active) setLoadingReservations(false)
+            })
+
+        return () => { active = false }
+    }, [authToken, reservationsRefresh])
 
     useEffect(() => {
         const newDrafts = {}
@@ -95,23 +122,24 @@ function AdminSection({
         }
     }
 
-    const handleDeleteReservation = (index) => {
-        const confirmed = window.confirm(
-            '¿Estás seguro de marcar esta reserva como lista/eliminada?'
-        )
+    const handleCancelReservation = async (reservation) => {
+        if (cancelingId !== null || reservation.estado === 'CANCELADA') return
+        if (!window.confirm(`¿Cancelar la reserva #${reservation.id}? Se conservará en el historial.`)) return
 
-        if (!confirmed) return
-
-        const updatedReservations = reservations.filter(
-            (_, reservationIndex) => reservationIndex !== index
-        )
-
-        localStorage.setItem(
-            'bajon_db_reservas',
-            JSON.stringify(updatedReservations)
-        )
-
-        setReservations(updatedReservations)
+        setCancelingId(reservation.id)
+        setReservationError('')
+        try {
+            await cancelarReserva(reservation.id, authToken, onSessionRenewed)
+            setReservations((current) => current.map((item) =>
+                item.id === reservation.id
+                    ? { ...item, estado: 'CANCELADA' }
+                    : item
+            ))
+        } catch (error) {
+            setReservationError(error.message || 'No fue posible cancelar la reserva.')
+        } finally {
+            setCancelingId(null)
+        }
     }
 
     return (
@@ -242,9 +270,30 @@ function AdminSection({
                 </div>
 
                 <div className="mt-5">
-                    <h2 className="text-light fw-bold mb-4">
-                        Gestión de Reservas
-                    </h2>
+                    <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+                        <h2 className="text-light fw-bold mb-0">
+                            Gestión de Reservas
+                        </h2>
+                        <button
+                            type="button"
+                            className="btn btn-outline-warning btn-sm"
+                            disabled={!authToken || loadingReservations}
+                            onClick={() => setReservationsRefresh((n) => n + 1)}
+                        >
+                            Actualizar reservas
+                        </button>
+                    </div>
+
+                    {reservationError && (
+                        <p className="alert alert-danger" role="alert">
+                            {reservationError}
+                        </p>
+                    )}
+                    {loadingReservations && (
+                        <p className="text-light" role="status">
+                            Cargando reservas desde MySQL...
+                        </p>
+                    )}
 
                     <div className="table-responsive">
                         <table className="table table-dark table-bordered align-middle">
@@ -255,6 +304,7 @@ function AdminSection({
                                 <th>Fecha</th>
                                 <th>Hora</th>
                                 <th>Personas</th>
+                                <th>Estado</th>
                                 <th>Acciones</th>
                             </tr>
                             </thead>
@@ -263,18 +313,15 @@ function AdminSection({
                             {reservations.length === 0 ? (
                                 <tr>
                                     <td
-                                        colSpan="6"
+                                        colSpan="7"
                                         className="text-center text-secondary py-4"
                                     >
-                                        No hay reservas pendientes.
+                                        No hay reservas registradas.
                                     </td>
                                 </tr>
                             ) : (
-                                reservations.map(
-                                    (reservation, index) => (
-                                        <tr
-                                            key={`${reservation.correo}-${index}`}
-                                        >
+                                reservations.map((reservation) => (
+                                        <tr key={reservation.id}>
                                             <td>
                                                 <strong>
                                                     {reservation.correo}
@@ -298,6 +345,14 @@ function AdminSection({
                                             </td>
 
                                             <td>
+                                                <span className={reservation.estado === 'CANCELADA'
+                                                    ? 'badge text-bg-secondary'
+                                                    : 'badge text-bg-success'}>
+                                                    {reservation.estado}
+                                                </span>
+                                            </td>
+
+                                            <td>
                                                 <div className="d-flex flex-column gap-2">
                                                     <a
                                                         href={`mailto:${reservation.correo}?subject=Sobre tu reserva en El Bajón del Vicho`}
@@ -309,13 +364,14 @@ function AdminSection({
                                                     <button
                                                         type="button"
                                                         className="btn btn-danger btn-sm"
-                                                        onClick={() =>
-                                                            handleDeleteReservation(
-                                                                index
-                                                            )
-                                                        }
+                                                        disabled={cancelingId !== null || reservation.estado === 'CANCELADA'}
+                                                        onClick={() => handleCancelReservation(reservation)}
                                                     >
-                                                        Marcar Lista (Eliminar)
+                                                        {reservation.estado === 'CANCELADA'
+                                                            ? 'Cancelada'
+                                                            : cancelingId === reservation.id
+                                                                ? 'Cancelando...'
+                                                                : 'Cancelar reserva'}
                                                     </button>
                                                 </div>
                                             </td>
