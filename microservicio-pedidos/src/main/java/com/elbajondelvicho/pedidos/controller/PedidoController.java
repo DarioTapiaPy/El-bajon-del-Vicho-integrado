@@ -1,6 +1,8 @@
+
 package com.elbajondelvicho.pedidos.controller;
 
 import com.elbajondelvicho.pedidos.dto.LineaPedidoRequest;
+import com.elbajondelvicho.pedidos.entity.EstadoPedido;
 import com.elbajondelvicho.pedidos.entity.Pedido;
 import com.elbajondelvicho.pedidos.service.PedidoService;
 
@@ -24,7 +26,7 @@ public class PedidoController {
         this.pedidoService = pedidoService;
     }
 
-    // Crear un pedido
+    // CREAR PEDIDO
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
@@ -42,7 +44,7 @@ public class PedidoController {
         return convertir(pedido);
     }
 
-    // Consultar pedidos del cliente autenticado
+    // CONSULTAR PEDIDOS DEL CLIENTE AUTENTICADO
     @GetMapping("/mis-pedidos")
     @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
     public List<PedidoResponse> misPedidos(
@@ -57,7 +59,8 @@ public class PedidoController {
                 .toList();
     }
 
-    // Consultar todos los pedidos: ADMIN y VENDEDOR
+    // CONSULTAR TODOS LOS PEDIDOS
+    // ADMIN Y VENDEDOR
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'VENDEDOR')")
     public List<PedidoResponse> listarTodos() {
@@ -69,7 +72,26 @@ public class PedidoController {
                 .toList();
     }
 
-    // Obtener ID del usuario desde el JWT
+    // ACTUALIZAR ESTADO DE UN PEDIDO
+    // ADMIN Y VENDEDOR
+    @PatchMapping("/{id}/estado")
+    @PreAuthorize("hasAnyRole('ADMIN', 'VENDEDOR')")
+    public PedidoResponse actualizarEstado(
+            @PathVariable Long id,
+            @RequestBody ActualizarEstadoRequest request
+    ) {
+        EstadoPedido nuevoEstado =
+                request == null ? null : request.estado();
+
+        Pedido pedido = pedidoService.actualizarEstado(
+                id,
+                nuevoEstado
+        );
+
+        return convertir(pedido);
+    }
+
+    // OBTENER ID DEL USUARIO DESDE EL JWT
     private Long obtenerUsuarioId(Jwt jwt) {
         Object valor = jwt.getClaim("userId");
 
@@ -83,7 +105,7 @@ public class PedidoController {
         return numero.longValue();
     }
 
-    // Convertir entidad Pedido a PedidoResponse
+    // CONVERTIR ENTIDAD PEDIDO A PEDIDORESPONSE
     private PedidoResponse convertir(Pedido pedido) {
 
         List<DetalleResponse> detalles = pedido
@@ -108,12 +130,17 @@ public class PedidoController {
         );
     }
 
-    // DTO para crear pedidos
+    // DTO PARA CREAR PEDIDOS
     public record PedidoRequest(
             List<LineaPedidoRequest> items
     ) {}
 
-    // DTO para los detalles del pedido
+    // DTO PARA ACTUALIZAR ESTADO
+    public record ActualizarEstadoRequest(
+            EstadoPedido estado
+    ) {}
+
+    // DTO PARA LOS DETALLES DEL PEDIDO
     public record DetalleResponse(
             String productoId,
             String nombreProducto,
@@ -122,7 +149,7 @@ public class PedidoController {
             BigDecimal subtotal
     ) {}
 
-    // DTO de respuesta del pedido
+    // DTO DE RESPUESTA DEL PEDIDO
     public record PedidoResponse(
             Long id,
             Long usuarioId,

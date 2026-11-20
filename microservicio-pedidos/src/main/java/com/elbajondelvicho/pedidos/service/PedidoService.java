@@ -1,13 +1,19 @@
+
 package com.elbajondelvicho.pedidos.service;
 
 import com.elbajondelvicho.pedidos.client.CatalogoClient;
 import com.elbajondelvicho.pedidos.dto.LineaPedidoRequest;
 import com.elbajondelvicho.pedidos.dto.ProductoCatalogo;
 import com.elbajondelvicho.pedidos.entity.DetallePedido;
+import com.elbajondelvicho.pedidos.entity.EstadoPedido;
 import com.elbajondelvicho.pedidos.entity.Pedido;
 import com.elbajondelvicho.pedidos.repository.PedidoRepository;
+
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -129,13 +135,90 @@ public class PedidoService {
                 );
     }
 
-    // NUEVO: CONSULTAR TODOS LOS PEDIDOS
+    // CONSULTAR TODOS LOS PEDIDOS
     // Usado por ADMIN y VENDEDOR
     @Transactional(readOnly = true)
     public List<Pedido> obtenerTodosLosPedidos() {
 
         return pedidoRepository
                 .findAllByOrderByFechaCreacionDesc();
+    }
+
+    // ACTUALIZAR ESTADO DE UN PEDIDO
+    @Transactional
+    public Pedido actualizarEstado(
+            Long pedidoId,
+            EstadoPedido nuevoEstado
+    ) {
+
+        // Validar ID
+        if (pedidoId == null || pedidoId <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "ID de pedido invalido"
+            );
+        }
+
+        // Validar nuevo estado
+        if (nuevoEstado == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "El nuevo estado es obligatorio"
+            );
+        }
+
+        // Buscar pedido junto con sus detalles
+        // Evita LazyInitializationException al construir la respuesta
+        Pedido pedido = pedidoRepository
+                .findConDetallesById(pedidoId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "El pedido no existe"
+                ));
+
+        EstadoPedido estadoActual = pedido.getEstado();
+
+        // Si ya tiene el estado solicitado, no modificar
+        if (estadoActual == nuevoEstado) {
+            return pedido;
+        }
+
+        // Validar las transiciones permitidas
+        boolean transicionValida = switch (estadoActual) {
+
+            case CREADO ->
+                    nuevoEstado == EstadoPedido.CONFIRMADO
+                            || nuevoEstado == EstadoPedido.CANCELADO;
+
+            case CONFIRMADO ->
+                    nuevoEstado == EstadoPedido.EN_PREPARACION
+                            || nuevoEstado == EstadoPedido.CANCELADO;
+
+            case EN_PREPARACION ->
+                    nuevoEstado == EstadoPedido.LISTO
+                            || nuevoEstado == EstadoPedido.CANCELADO;
+
+            case LISTO ->
+                    nuevoEstado == EstadoPedido.ENTREGADO
+                            || nuevoEstado == EstadoPedido.CANCELADO;
+
+            case ENTREGADO, CANCELADO -> false;
+        };
+
+        // Rechazar transiciones inválidas
+        if (!transicionValida) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "No se permite cambiar de "
+                            + estadoActual + " a " + nuevoEstado
+            );
+        }
+
+        // Actualizar estado
+        pedido.setEstado(nuevoEstado);
+
+        // Guardar el nuevo estado en MySQL
+        return pedidoRepository.saveAndFlush(pedido);
     }
 
     // VALIDAR SOLICITUD DE COMPRA
