@@ -1,6 +1,7 @@
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { iniciarSesion, registrarCliente, renovarSesion, cerrarSesion } from './services/authApi.js'
+import { crearPedido } from './services/pedidosApi.js'
 
 import Header from './components/Header.jsx'
 import Hero from './components/Hero.jsx'
@@ -17,6 +18,7 @@ import OrderSuccessModal from './components/OrderSuccessModal.jsx'
 import LoginModal from './components/LoginModal.jsx'
 import RegisterModal from './components/RegisterModal.jsx'
 import AddressModal from './components/AddressModal.jsx'
+
 
 function loadCart() {
     try {
@@ -61,6 +63,7 @@ function App() {
     // Pedidos
     const [selectedBranch, setSelectedBranch] = useState('')
     const [orderSummary, setOrderSummary] = useState(null)
+    const enviandoPedido = useRef(false)
 
     // Recuperar la sesión desde la cookie HttpOnly al cargar React.
     // renovarSesion() evita solicitudes duplicadas durante StrictMode.
@@ -305,8 +308,20 @@ function App() {
         setIsCartOpen(false)
     }
 
-    // Confirmación del carrito
+    // Antes de confirmar una compra, exigir una sesión válida.
     const handleConfirmOrder = () => {
+        if (!authToken || !authUser) {
+            window.alert('Debes iniciar sesión antes de realizar una compra.')
+            setIsRegisterOpen(false)
+            setIsLoginOpen(true)
+            return
+        }
+
+        if (cart.length === 0) {
+            window.alert('Tu carrito está vacío.')
+            return
+        }
+
         setIsCartOpen(false)
         setIsDeliveryOptionsOpen(true)
     }
@@ -349,51 +364,85 @@ function App() {
         return { itemCount, total }
     }
 
-    // Selección de sucursal
-    const handleSelectBranch = (branch) => {
-        const { itemCount, total } = getCartSummary()
+    // Registrar el pedido en el microservicio de pedidos (8083).
+    // No generar números aleatorios ni vaciar el carrito antes de confirmar.
+    const registrarPedidoReal = async ({ deliveryType, branch = '', address = '' }) => {
+        if (enviandoPedido.current) return
 
-        const orderNumber =
-            Math.floor(Math.random() * 9000) + 1000
+        if (!authToken || !authUser) {
+            window.alert('Debes iniciar sesión antes de realizar una compra.')
+            setIsRegisterOpen(false)
+            setIsLoginOpen(true)
+            return
+        }
 
-        setSelectedBranch(branch)
-        setIsPickupBranchOpen(false)
+        if (cart.length === 0) {
+            window.alert('Tu carrito está vacío.')
+            return
+        }
 
-        setOrderSummary({
-            orderNumber,
-            itemCount,
-            total,
-            deliveryType: 'pickup',
-            branch,
-            address: '',
-            userEmail,
-        })
+        enviandoPedido.current = true
+        try {
+            const items = cart.map((item) => ({
+                productoId: item.id,
+                cantidad: item.quantity,
+            }))
 
-        setCart([])
+            const pedido = await crearPedido(
+                { items },
+                authToken,
+                (sesion) => {
+                    setAuthToken(sesion.token)
+                    setAuthUser(sesion.usuario)
+                    setUserEmail(sesion.usuario.email)
+                }
+            )
+
+            // Nunca mostrar confirmación con datos ficticios.
+            if (!pedido || !Number.isSafeInteger(Number(pedido.id)) ||
+                Number(pedido.id) <= 0 || !Number.isFinite(Number(pedido.total))) {
+                throw new Error(
+                    'La respuesta del servidor no fue válida. Revisa tus pedidos antes de reintentar.'
+                )
+            }
+
+            const { itemCount } = getCartSummary()
+            setSelectedBranch(branch)
+            setOrderSummary({
+                orderNumber: pedido.id,
+                itemCount,
+                total: Number(pedido.total),
+                deliveryType,
+                branch,
+                address,
+                userEmail: authUser.email,
+            })
+
+            setIsPickupBranchOpen(false)
+            setIsAddressOpen(false)
+            setIsDeliveryOptionsOpen(false)
+            setCart([])
+            return pedido
+        } catch (error) {
+            console.error('Error al registrar pedido:', error)
+            window.alert(
+                `${error?.message || 'No se pudo registrar el pedido.'} ` +
+                'Si hubo un problema de conexión, revisa tus pedidos antes de reintentar.'
+            )
+        } finally {
+            enviandoPedido.current = false
+        }
     }
 
-    // Confirmación de dirección
-    const handleConfirmAddress = (address) => {
-        localStorage.setItem('userAddress', address)
+    // Retiro en sucursal (la sucursal se muestra en React, no se persiste aún en pedidos).
+    const handleSelectBranch = async (branch) => {
+        await registrarPedidoReal({ deliveryType: 'pickup', branch })
+    }
 
-        const { itemCount, total } = getCartSummary()
-
-        const orderNumber =
-            Math.floor(Math.random() * 9000) + 1000
-
-        setIsAddressOpen(false)
-
-        setOrderSummary({
-            orderNumber,
-            itemCount,
-            total,
-            deliveryType: 'delivery',
-            branch: '',
-            address,
-            userEmail,
-        })
-
-        setCart([])
+    // Despacho (la dirección se muestra en React, no se persiste aún en pedidos).
+    const handleConfirmAddress = async (address) => {
+        const pedido = await registrarPedidoReal({ deliveryType: 'delivery', address })
+        if (pedido) localStorage.setItem('userAddress', address)
     }
 
     const handleContinueShopping = () => {
@@ -608,7 +657,7 @@ function App() {
                     onSaveProduct={handleSaveProduct}
                     onToggleStock={handleToggleStock}
                     onLogout={handleLogout}
-                       authToken={authToken}
+                    authToken={authToken}
                     onSessionRenewed={(sesion) => {
                         setAuthToken(sesion.token)
                         setAuthUser(sesion.usuario)
