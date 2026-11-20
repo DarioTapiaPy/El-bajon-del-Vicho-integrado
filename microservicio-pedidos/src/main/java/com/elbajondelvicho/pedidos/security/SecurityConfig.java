@@ -1,3 +1,4 @@
+
 package com.elbajondelvicho.pedidos.security;
 
 import jakarta.servlet.DispatcherType;
@@ -76,8 +77,14 @@ public class SecurityConfig {
                                 "/api/v1/pedidos"
                         ).hasAnyRole("ADMIN", "VENDEDOR")
 
-                        // El resto queda bloqueado
-                        // hasta implementar sus controladores
+                        // NUEVO: actualizar estado del pedido
+                        // ADMIN o VENDEDOR
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/v1/pedidos/*/estado"
+                        ).hasAnyRole("ADMIN", "VENDEDOR")
+
+                        // Bloquear cualquier otra ruta
                         .anyRequest().denyAll()
                 )
 
