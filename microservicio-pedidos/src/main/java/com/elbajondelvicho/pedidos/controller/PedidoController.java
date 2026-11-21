@@ -38,7 +38,7 @@ public class PedidoController {
 
         Pedido pedido = pedidoService.crearPedido(
                 usuarioId,
-                request.items()
+                request == null ? null : request.items()
         );
 
         return convertir(pedido);
@@ -97,7 +97,8 @@ public class PedidoController {
 
         if (!(valor instanceof Number numero)
                 || numero.longValue() <= 0) {
-            throw new IllegalArgumentException(
+            throw new org.springframework.web.server.ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
                     "JWT sin usuario valido"
             );
         }

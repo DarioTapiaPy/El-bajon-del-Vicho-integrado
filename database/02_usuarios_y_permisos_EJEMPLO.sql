@@ -1,0 +1,23 @@
+-- PLANTILLA: ESTE ARCHIVO NO EJECUTA COMANDOS POR SEGURIDAD.
+-- En MySQL Workbench (como administrador), REEMPLAZAR contrasenas antes
+-- de quitar prefijos de comentario y ejecutar sobre el PC de destino.
+-- Elegir tres claves DIFERENTES; nunca subir al repositorio las claves reales.
+-- Si las cuentas ya existen, CREATE USER IF NOT EXISTS no cambia su clave.
+--
+-- CREATE USER IF NOT EXISTS 'vicho_app'@'localhost'
+--   IDENTIFIED BY 'REEMPLAZAR_CON_CLAVE_FUERTE_PROPIA';
+-- CREATE USER IF NOT EXISTS 'reservas_app'@'localhost'
+--   IDENTIFIED BY 'REEMPLAZAR_CON_OTRA_CLAVE_FUERTE_PROPIA';
+-- CREATE USER IF NOT EXISTS 'pedidos_app'@'localhost'
+--   IDENTIFIED BY 'REEMPLAZAR_CON_TERCERA_CLAVE_FUERTE_PROPIA';
+--
+-- GRANT SELECT, INSERT, UPDATE, DELETE
+--   ON el_bajon_del_vicho_desarrollo.* TO 'vicho_app'@'localhost';
+-- GRANT SELECT, INSERT, UPDATE, DELETE
+--   ON el_bajon_del_vicho_reservas.* TO 'reservas_app'@'localhost';
+-- GRANT SELECT, INSERT, UPDATE, DELETE
+--   ON el_bajon_del_vicho_pedidos.* TO 'pedidos_app'@'localhost';
+--
+-- NOTA: no usar DROP USER; respetar las credenciales que ya funcionan.
+-- Configurar DB_PASSWORD, RESERVAS_DB_PASSWORD y PEDIDOS_DB_PASSWORD
+-- en el entorno local correspondiente. Todos comparten JWT_SECRET.

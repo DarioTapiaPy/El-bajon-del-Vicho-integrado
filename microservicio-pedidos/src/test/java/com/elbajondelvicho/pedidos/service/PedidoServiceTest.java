@@ -1,6 +1,9 @@
 package com.elbajondelvicho.pedidos.service;
 
 import com.elbajondelvicho.pedidos.client.CatalogoClient;
+import com.elbajondelvicho.pedidos.dto.LineaPedidoRequest;
+import com.elbajondelvicho.pedidos.dto.ProductoCatalogo;
+import com.elbajondelvicho.pedidos.entity.DetallePedido;
 import com.elbajondelvicho.pedidos.entity.EstadoPedido;
 import com.elbajondelvicho.pedidos.entity.Pedido;
 import com.elbajondelvicho.pedidos.repository.PedidoRepository;
@@ -12,9 +15,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -174,4 +180,117 @@ class PedidoServiceTest {
         verify(pedidoRepository, never()).saveAndFlush(any(Pedido.class));
         verifyNoInteractions(catalogoClient);
     }
+
+    // Creacion del pedido: se usa el precio del catalogo (no datos del cliente).
+    @Test
+    void crearPedido_dosProductos_calculaTotalesDesdeCatalogo() {
+        when(catalogoClient.obtenerProductos()).thenReturn(new ProductoCatalogo[]{
+                new ProductoCatalogo("prod-1", "Combo", new BigDecimal("8990.00"), true),
+                new ProductoCatalogo("prod-2", "Agua", new BigDecimal("1200.00"), true)
+        });
+        when(pedidoRepository.saveAndFlush(any(Pedido.class)))
+                .thenAnswer(invocacion -> invocacion.getArgument(0));
+
+        Pedido pedido = pedidoService.crearPedido(10L, List.of(
+                new LineaPedidoRequest("prod-1", 2),
+                new LineaPedidoRequest("prod-2", 1)
+        ));
+        assertEquals(10L, pedido.getUsuarioId());
+        assertEquals(EstadoPedido.CREADO, pedido.getEstado());
+        assertEquals(2, pedido.getDetalles().size());
+        assertEquals(0, new BigDecimal("19180.00").compareTo(pedido.getTotal()));
+        assertEquals(0, new BigDecimal("17980.00").compareTo(
+                pedido.getDetalles().get(0).getSubtotal()));
+        assertSame(pedido, pedido.getDetalles().get(0).getPedido());
+        verify(pedidoRepository).saveAndFlush(pedido);
+    }
+
+    @Test
+    void crearPedido_sinItems_rechazaAntesDeConsultarCatalogo() {
+        assertThrows(IllegalArgumentException.class,
+                () -> pedidoService.crearPedido(10L, List.of()));
+        verifyNoInteractions(pedidoRepository, catalogoClient);
+    }
+
+    @Test
+    void crearPedido_cantidadCero_rechazaAntesDeConsultarCatalogo() {
+        assertThrows(IllegalArgumentException.class,
+                () -> pedidoService.crearPedido(10L,
+                        List.of(new LineaPedidoRequest("prod-1", 0))));
+        verifyNoInteractions(pedidoRepository, catalogoClient);
+    }
+
+    @Test
+    void crearPedido_cantidadMayorACincuenta_rechaza() {
+        assertThrows(IllegalArgumentException.class,
+                () -> pedidoService.crearPedido(10L,
+                        List.of(new LineaPedidoRequest("prod-1", 51))));
+        verifyNoInteractions(pedidoRepository, catalogoClient);
+    }
+
+    @Test
+    void crearPedido_productosDuplicados_rechaza() {
+        assertThrows(IllegalArgumentException.class,
+                () -> pedidoService.crearPedido(10L, List.of(
+                        new LineaPedidoRequest("prod-1", 1),
+                        new LineaPedidoRequest("prod-1", 2))));
+        verifyNoInteractions(pedidoRepository, catalogoClient);
+    }
+
+    @Test
+    void crearPedido_productoNoExiste_rechazaSinGuardar() {
+        when(catalogoClient.obtenerProductos()).thenReturn(new ProductoCatalogo[]{});
+        assertThrows(IllegalArgumentException.class,
+                () -> pedidoService.crearPedido(10L,
+                        List.of(new LineaPedidoRequest("no-existe", 1))));
+        verify(pedidoRepository, never()).saveAndFlush(any(Pedido.class));
+    }
+
+    @Test
+    void crearPedido_productoSinStock_rechazaSinGuardar() {
+        when(catalogoClient.obtenerProductos()).thenReturn(new ProductoCatalogo[]{
+                new ProductoCatalogo("prod-1", "Combo", new BigDecimal("8990.00"), false)
+        });
+        assertThrows(IllegalArgumentException.class,
+                () -> pedidoService.crearPedido(10L,
+                        List.of(new LineaPedidoRequest("prod-1", 1))));
+        verify(pedidoRepository, never()).saveAndFlush(any(Pedido.class));
+    }
+
+    @Test
+    void crearPedido_precioCatalogoInvalido_rechazaSinGuardar() {
+        when(catalogoClient.obtenerProductos()).thenReturn(new ProductoCatalogo[]{
+                new ProductoCatalogo("prod-1", "Combo", new BigDecimal("-10.00"), true)
+        });
+        assertThrows(IllegalStateException.class,
+                () -> pedidoService.crearPedido(10L,
+                        List.of(new LineaPedidoRequest("prod-1", 1))));
+        verify(pedidoRepository, never()).saveAndFlush(any(Pedido.class));
+    }
+
+    @Test
+    void crearPedido_usuarioInvalido_rechazaAntesDeConsultarCatalogo() {
+        assertThrows(IllegalArgumentException.class,
+                () -> pedidoService.crearPedido(0L,
+                        List.of(new LineaPedidoRequest("prod-1", 1))));
+        verifyNoInteractions(pedidoRepository, catalogoClient);
+    }
+
+    @Test
+    void obtenerPedidosDeUsuario_noConsultaOtrosUsuarios() {
+        Pedido propio = new Pedido();
+        propio.setUsuarioId(10L);
+        when(pedidoRepository.findByUsuarioIdOrderByFechaCreacionDesc(10L))
+                .thenReturn(List.of(propio));
+        assertEquals(List.of(propio), pedidoService.obtenerPedidosDeUsuario(10L));
+        verify(pedidoRepository).findByUsuarioIdOrderByFechaCreacionDesc(10L);
+    }
+
+    @Test
+    void obtenerPedidosDeUsuario_idInvalido_rechazaSinAccesoABase() {
+        assertThrows(IllegalArgumentException.class,
+                () -> pedidoService.obtenerPedidosDeUsuario(-1L));
+        verifyNoInteractions(pedidoRepository, catalogoClient);
+    }
+
 }
