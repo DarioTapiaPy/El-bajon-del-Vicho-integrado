@@ -4,6 +4,7 @@ import { iniciarSesion, registrarCliente, renovarSesion, cerrarSesion } from './
 import { crearPedido } from './services/pedidosApi.js'
 
 import Header from './components/Header.jsx'
+import MisPedidos from './components/MisPedidos.jsx'
 import Hero from './components/Hero.jsx'
 import Menu from './components/Menu.jsx'
 import ReservationSection from './components/ReservationSection.jsx'
@@ -37,6 +38,7 @@ function App() {
     // Carrito
     const [cart, setCart] = useState(loadCart)
     const [isCartOpen, setIsCartOpen] = useState(false)
+    const [isMyOrdersOpen, setIsMyOrdersOpen] = useState(false)
 
     // Autenticación JWT
     const [userEmail, setUserEmail] = useState('')
@@ -93,6 +95,15 @@ function App() {
         recuperarSesion()
         return () => { activo = false }
     }, [])
+
+    // Desplazar la vista a Mis pedidos cuando CLIENTE abre su historial.
+    useEffect(() => {
+        if (!isMyOrdersOpen) return
+        document.getElementById('mis-pedidos')?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+        })
+    }, [isMyOrdersOpen])
 
     // Guardar carrito localmente
     useEffect(() => {
@@ -255,6 +266,7 @@ function App() {
         setAuthToken(result.token)
         setAuthUser(result.usuario)
         setUserEmail(result.usuario.email)
+        setIsMyOrdersOpen(false)
         setIsLoginOpen(false)
     }
 
@@ -281,6 +293,7 @@ function App() {
         setAuthToken(null)
         setAuthUser(null)
         setUserEmail('Invitado')
+        setIsMyOrdersOpen(false)
         setIsLoginOpen(false)
     }
 
@@ -297,6 +310,7 @@ function App() {
         setAuthToken(null)
         setAuthUser(null)
         setUserEmail('')
+        setIsMyOrdersOpen(false)
 
         localStorage.removeItem('userEmail')
         localStorage.removeItem('userAddress')
@@ -576,6 +590,17 @@ function App() {
             <Header
                 cartCount={cartCount}
                 isLoggedIn={Boolean(authToken && authUser)}
+                showMyOrders={Boolean(authToken && authUser?.rol === 'CLIENTE')}
+                onMyOrdersClick={() => {
+                    if (isMyOrdersOpen) {
+                        document.getElementById('mis-pedidos')?.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start',
+                        })
+                    } else {
+                        setIsMyOrdersOpen(true)
+                    }
+                }}
                 onLogin={() => {
                     setIsRegisterOpen(false)
                     setIsLoginOpen(true)
@@ -589,6 +614,19 @@ function App() {
             />
 
             <Hero />
+
+            {/* Historial exclusivo del CLIENTE; se consulta al abrirlo. */}
+            {isMyOrdersOpen && authToken && authUser?.rol === 'CLIENTE' && (
+                <MisPedidos
+                    authToken={authToken}
+                    onSessionRenewed={(sesion) => {
+                        setAuthToken(sesion.token)
+                        setAuthUser(sesion.usuario)
+                        setUserEmail(sesion.usuario.email)
+                    }}
+                    onClose={() => setIsMyOrdersOpen(false)}
+                />
+            )}
 
             {productsStatus === 'success' ? (
                 <Menu
