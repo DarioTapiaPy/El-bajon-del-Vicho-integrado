@@ -58,6 +58,15 @@ public class SecurityConfig {
                                 DispatcherType.ERROR
                         ).permitAll()
 
+                        // Documentacion OpenAPI y Swagger UI: consulta publica.
+                        // Los endpoints de pedidos siguen exigiendo JWT.
+                        .requestMatchers(
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/v3/api-docs",
+                                "/v3/api-docs/**"
+                        ).permitAll()
+
                         // Crear pedidos: CLIENTE o ADMIN
                         .requestMatchers(
                                 HttpMethod.POST,

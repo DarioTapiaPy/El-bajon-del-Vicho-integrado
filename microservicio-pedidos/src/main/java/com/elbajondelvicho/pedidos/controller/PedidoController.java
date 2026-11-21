@@ -6,6 +6,12 @@ import com.elbajondelvicho.pedidos.entity.EstadoPedido;
 import com.elbajondelvicho.pedidos.entity.Pedido;
 import com.elbajondelvicho.pedidos.service.PedidoService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,6 +23,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
+@Tag(name = "Pedidos", description = "Creacion, historial y gestion de estados de pedidos. La autenticacion se realiza mediante JWT Bearer.")
 @RequestMapping("/api/v1/pedidos")
 public class PedidoController {
 
@@ -27,6 +34,13 @@ public class PedidoController {
     }
 
     // CREAR PEDIDO
+    @Operation(summary = "Crear pedido", description = "CLIENTE o ADMIN. Obtiene el usuario del JWT y calcula los totales con los datos del catalogo.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Pedido creado"),
+            @ApiResponse(responseCode = "400", description = "Datos del pedido invalidos"),
+            @ApiResponse(responseCode = "401", description = "Sin JWT valido"),
+            @ApiResponse(responseCode = "403", description = "Rol no autorizado")
+    })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
@@ -45,6 +59,12 @@ public class PedidoController {
     }
 
     // CONSULTAR PEDIDOS DEL CLIENTE AUTENTICADO
+    @Operation(summary = "Consultar mis pedidos", description = "CLIENTE o ADMIN. Solo consulta los pedidos del usuario identificado por el JWT.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Historial del usuario"),
+            @ApiResponse(responseCode = "401", description = "Sin JWT valido"),
+            @ApiResponse(responseCode = "403", description = "Rol no autorizado")
+    })
     @GetMapping("/mis-pedidos")
     @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
     public List<PedidoResponse> misPedidos(
@@ -61,6 +81,12 @@ public class PedidoController {
 
     // CONSULTAR TODOS LOS PEDIDOS
     // ADMIN Y VENDEDOR
+    @Operation(summary = "Consultar todos los pedidos", description = "VENDEDOR o ADMIN. Lista los pedidos con sus detalles.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Listado general"),
+            @ApiResponse(responseCode = "401", description = "Sin JWT valido"),
+            @ApiResponse(responseCode = "403", description = "Rol no autorizado")
+    })
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'VENDEDOR')")
     public List<PedidoResponse> listarTodos() {
@@ -74,9 +100,19 @@ public class PedidoController {
 
     // ACTUALIZAR ESTADO DE UN PEDIDO
     // ADMIN Y VENDEDOR
+    @Operation(summary = "Actualizar estado de un pedido", description = "VENDEDOR o ADMIN. Valida las transiciones de estado permitidas.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Estado actualizado"),
+            @ApiResponse(responseCode = "400", description = "Identificador o estado invalido"),
+            @ApiResponse(responseCode = "401", description = "Sin JWT valido"),
+            @ApiResponse(responseCode = "403", description = "Rol no autorizado"),
+            @ApiResponse(responseCode = "404", description = "Pedido inexistente"),
+            @ApiResponse(responseCode = "409", description = "Transicion de estado no permitida")
+    })
     @PatchMapping("/{id}/estado")
     @PreAuthorize("hasAnyRole('ADMIN', 'VENDEDOR')")
     public PedidoResponse actualizarEstado(
+            @Parameter(description = "Identificador numerico del pedido", example = "2")
             @PathVariable Long id,
             @RequestBody ActualizarEstadoRequest request
     ) {
