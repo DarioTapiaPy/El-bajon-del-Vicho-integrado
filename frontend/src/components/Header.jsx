@@ -3,13 +3,14 @@ import { useState } from 'react'
 function Header({
                     cartCount = 0,
                     isLoggedIn = false,
+                    showMyOrders = false,
+                    onMyOrdersClick,
                     onLogin,
                     onRegister,
                     onLogout,
                     onCartClick,
                 }) {
-    const [menuOpen, setMenuOpen] =
-        useState(false)
+    const [menuOpen, setMenuOpen] = useState(false)
 
     return (
         <header className="sticky-top">
@@ -31,9 +32,7 @@ function Header({
                     <button
                         className="navbar-toggler"
                         type="button"
-                        onClick={() =>
-                            setMenuOpen(!menuOpen)
-                        }
+                        onClick={() => setMenuOpen(!menuOpen)}
                         aria-expanded={menuOpen}
                         aria-label="Abrir menú"
                     >
@@ -48,61 +47,49 @@ function Header({
                     >
                         <ul className="navbar-nav me-auto mb-2 mb-lg-0">
                             <li className="nav-item">
-                                <a
-                                    className="nav-link"
-                                    href="#inicio"
-                                >
-                                    Inicio
-                                </a>
+                                <a className="nav-link" href="#inicio">Inicio</a>
                             </li>
 
                             <li className="nav-item">
-                                <a
-                                    className="nav-link"
-                                    href="#menu"
-                                >
-                                    Menú
-                                </a>
+                                <a className="nav-link" href="#menu">Menú</a>
                             </li>
 
                             <li className="nav-item">
-                                <a
-                                    className="nav-link"
-                                    href="#reservas"
-                                >
-                                    Reservas
-                                </a>
+                                <a className="nav-link" href="#reservas">Reservas</a>
                             </li>
 
                             <li className="nav-item">
-                                <a
-                                    className="nav-link"
-                                    href="#sucursales"
-                                >
-                                    Sucursales
-                                </a>
+                                <a className="nav-link" href="#sucursales">Sucursales</a>
                             </li>
 
                             <li className="nav-item">
-                                <a
-                                    className="nav-link"
-                                    href="#contacto"
-                                >
-                                    Contacto
-                                </a>
+                                <a className="nav-link" href="#contacto">Contacto</a>
                             </li>
                         </ul>
 
                         {/* ACCIONES */}
                         <div className="d-flex flex-wrap gap-2">
                             {isLoggedIn ? (
-                                <button
-                                    type="button"
-                                    className="btn btn-outline-light"
-                                    onClick={onLogout}
-                                >
-                                    Cerrar sesión
-                                </button>
+                                <>
+                                    {/* Solo se habilitará para CLIENTE desde App.jsx. */}
+                                    {showMyOrders && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-outline-warning"
+                                            onClick={onMyOrdersClick}
+                                        >
+                                            Mis pedidos
+                                        </button>
+                                    )}
+
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-light"
+                                        onClick={onLogout}
+                                    >
+                                        Cerrar sesión
+                                    </button>
+                                </>
                             ) : (
                                 <>
                                     <button
@@ -132,8 +119,8 @@ function Header({
                                 🛒
 
                                 <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-light text-dark">
-                  {cartCount}
-                </span>
+                                    {cartCount}
+                                </span>
                             </button>
                         </div>
                     </div>
