@@ -581,6 +581,12 @@ function App() {
                 status={productsStatus}
                 onRetry={() => setProductsRetry((value) => value + 1)}
                 onLogout={handleLogout}
+                authToken={authToken}
+                onSessionRenewed={(sesion) => {
+                    setAuthToken(sesion.token)
+                    setAuthUser(sesion.usuario)
+                    setUserEmail(sesion.usuario.email)
+                }}
             />
         )
     }
