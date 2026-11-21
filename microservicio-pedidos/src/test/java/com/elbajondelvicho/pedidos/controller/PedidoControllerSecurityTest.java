@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -21,6 +22,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -281,4 +283,93 @@ class PedidoControllerSecurityTest {
         verify(pedidoService, never()).obtenerPedidosDeUsuario(99L);
         verify(pedidoService, never()).obtenerTodosLosPedidos();
     }
+
+    @Test
+    void sinJwt_noPuedeConsultarMisPedidos_devuelve401() throws Exception {
+        mockMvc.perform(get("/api/v1/pedidos/mis-pedidos"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(pedidoService);
+    }
+
+    @Test
+    void sinJwt_noPuedeCrearPedidos_devuelve401() throws Exception {
+        mockMvc.perform(post("/api/v1/pedidos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"items\":[{\"productoId\":\"prod-1\",\"cantidad\":1}]}"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(pedidoService);
+    }
+
+    @Test
+    void sinJwt_noPuedeActualizarEstado_devuelve401() throws Exception {
+        mockMvc.perform(patch("/api/v1/pedidos/2/estado")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estado\":\"CONFIRMADO\"}"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(pedidoService);
+    }
+
+    @Test
+    void bearerInvalido_devuelve401() throws Exception {
+        when(jwtDecoder.decode("token-invalido"))
+                .thenThrow(new BadJwtException("Token invalido para pruebas"));
+        mockMvc.perform(get("/api/v1/pedidos")
+                        .header("Authorization", "Bearer token-invalido"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(pedidoService);
+    }
+
+    @Test
+    void rolDesconocido_noPuedeConsultarTodos_devuelve403() throws Exception {
+        mockMvc.perform(get("/api/v1/pedidos")
+                        .with(jwt()
+                                .jwt(token -> token
+                                        .subject("usuario@ejemplo.test")
+                                        .claim("userId", 44L)
+                                        .claim("roles", List.of("INVITADO")))
+                                .authorities(token -> new ArrayList<GrantedAuthority>(
+                                        jwtAuthenticationConverter.convert(token).getAuthorities()
+                                ))))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(pedidoService);
+    }
+
+    @Test
+    void cliente_conIdJwtInvalido_noPuedeCrearPedidos_devuelve401() throws Exception {
+        mockMvc.perform(post("/api/v1/pedidos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"items\":[{\"productoId\":\"prod-1\",\"cantidad\":1}]}")
+                        .with(jwt()
+                                .jwt(token -> token
+                                        .subject("cliente@ejemplo.test")
+                                        .claim("userId", 0L)
+                                        .claim("roles", List.of("CLIENTE")))
+                                .authorities(token -> new ArrayList<GrantedAuthority>(
+                                        jwtAuthenticationConverter.convert(token).getAuthorities()
+                                ))))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(pedidoService);
+    }
+
+    @Test
+    void cliente_crearPedidoInvalido_devuelve400ConDetalle() throws Exception {
+        when(pedidoService.crearPedido(10L, List.of(new LineaPedidoRequest("prod-1", 0))))
+                .thenThrow(new IllegalArgumentException("Producto o cantidad invalida"));
+
+        mockMvc.perform(post("/api/v1/pedidos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"items\":[{\"productoId\":\"prod-1\",\"cantidad\":0}]}")
+                        .with(jwt()
+                                .jwt(token -> token
+                                        .subject("cliente@ejemplo.test")
+                                        .claim("userId", 10L)
+                                        .claim("roles", List.of("CLIENTE")))
+                                .authorities(token -> new ArrayList<GrantedAuthority>(
+                                        jwtAuthenticationConverter.convert(token).getAuthorities()
+                                ))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Producto o cantidad invalida"));
+        verify(pedidoService).crearPedido(10L, List.of(new LineaPedidoRequest("prod-1", 0)));
+    }
+
 }
